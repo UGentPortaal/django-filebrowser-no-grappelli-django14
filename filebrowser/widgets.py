@@ -2,11 +2,9 @@
 
 # DJANGO IMPORTS
 from django.template.loader import render_to_string
-from django.forms.widgets import FileInput as DjangoFileInput
 from django.forms.widgets import ClearableFileInput as DjangoClearableFileInput
 from django.forms.widgets import CheckboxInput
-from django.forms.fields import FilePathField
-from django.utils.translation import ugettext, ugettext_lazy
+from django.utils.translation import ugettext_lazy
 from django.utils.safestring import mark_safe
 
 # FILEBROWSER IMPORTS
@@ -53,7 +51,7 @@ class ClearableFileInput(DjangoClearableFileInput):
     input_text = ugettext_lazy('Change')
     clear_checkbox_label = ugettext_lazy('Clear')
     
-    template_with_initial = u'%(clear_template)s<br />%(input)s %(preview)s'
+    template_with_initial = u'<p class="file-upload">%(initial_text)s: %(initial)s<span class="clearable-file-input">%(clear_template)s</span><br />%(input_text)s: %(input)s %(preview)s</p>'
     template_with_clear = u'%(clear)s <label for="%(clear_checkbox_id)s">%(clear_checkbox_label)s</label>'
     
     def render(self, name, value, attrs=None):

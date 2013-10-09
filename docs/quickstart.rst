@@ -11,9 +11,9 @@ For using the |filebrowser|, `Django <http://www.djangoproject.com>`_ needs to b
 Requirements
 ------------
 
-* Django 1.3, http://www.djangoproject.com
-* Grappelli 2.3, https://github.com/sehmaschine/django-grappelli
-* PIL, http://www.pythonware.com/products/pil/
+* Django 1.4/1.5, http://www.djangoproject.com
+* Grappelli 2.4, https://github.com/sehmaschine/django-grappelli
+* Pillow, https://github.com/python-imaging/Pillow
 
 Download
 --------
@@ -54,12 +54,20 @@ Collect the media files::
 .. note::
     Please refer to the `Staticfiles Documentation <http://docs.djangoproject.com/en/dev/ref/contrib/staticfiles/>`_ for setting up and using ``staticfiles``.
 
+Settings
+--------
+
+Check the :ref:`settings`. You need to add a folder "uploads" within ``site.storage.location`` when using the default settings.
+
 Testing
 -------
 
 Run the |filebrowser| tests::
 
     python manage.py test filebrowser
+
+.. warning::
+    Please note that the tests will copy files to your filesystem.
 
 Start the devserver and login to your admin site::
 

@@ -5,6 +5,23 @@
 
 .. _views:
 
+Adding Sites
+============
+
+Similar to ``django.contrib.admin``, you first need to add a ``filebrowser.site`` to your admin interface.
+
+In your ``urls.py`` import the default FileBrowser site (or your custom site)::
+
+    from filebrowser.sites import site
+
+and add the site to your URL-patterns (before any admin-urls)::
+    
+    urlpatterns = patterns('',
+       url(r'^adminurl/filebrowser/', include(site.urls)),
+    )
+
+Now you are able to browse the location defined with the storage engine associated to your site.
+
 Views
 =====
 
@@ -15,7 +32,7 @@ Browse
 
 Browse a directory on your server. Returns a :ref:`filelisting`::
 
-    http://mysite.com/adminurl/filebrowser/browse/
+    /adminurl/filebrowser/browse/
 
 * URL: ``fb_browse``
 * Optional query string args: ``dir``, ``o``, ``ot``, ``q``, ``p``, ``filter_date``, ``filter_type``, ``type``
@@ -27,7 +44,7 @@ Create directory
 
 Create a new folder on your server::
 
-    http://mysite.com/adminurl/filebrowser/createdir/
+    /adminurl/filebrowser/createdir/
 
 * URL: ``fb_createdir``
 * Optional query string args: ``dir``
@@ -40,7 +57,7 @@ Upload
 
 Multiple upload::
 
-    http://mysite.com/adminurl/filebrowser/upload/
+    /adminurl/filebrowser/upload/
 
 * URL: ``fb_upload``
 * Optional query string args: ``dir``
@@ -53,7 +70,7 @@ Edit
 
 Edit a file or folder::
 
-    http://mysite.com/adminurl/filebrowser/edit/?filename=testimage.jpg
+    /adminurl/filebrowser/edit/?filename=testimage.jpg
 
 * URL: ``fb_edit``
 * Required query string args: ``filename``
@@ -72,7 +89,7 @@ Confirm delete
 
 Confirm the deletion of a file or folder::
 
-    http://mysite.com/adminurl/filebrowser/confirm_delete/?filename=testimage.jpg
+    /adminurl/filebrowser/confirm_delete/?filename=testimage.jpg
 
 * URL: ``fb_confirm_delete``
 * Required query string args: ``filename``
@@ -88,7 +105,7 @@ Delete
 
 Delete a file or folder::
 
-    http://mysite.com/adminurl/filebrowser/delete/?filename=testimage.jpg
+    /adminurl/filebrowser/delete/?filename=testimage.jpg
 
 * URL: ``fb_delete``
 * Required query string args: ``filename``
@@ -108,7 +125,7 @@ Version
 
 Generate a version of an Image as defined with ``ADMIN_VERSIONS``::
 
-    http://mysite.com/adminurl/filebrowser/version/?filename=testimage.jpg
+    /adminurl/filebrowser/version/?filename=testimage.jpg
 
 * URL: ``fb_version``
 * Required query string args: ``filename``
@@ -133,6 +150,7 @@ Sent before a an Upload starts. Arguments:
 
 * ``path``: Absolute server path to the file/folder
 * ``name``: Name of the file/folder
+* ``site``: Current ``FileBrowserSite`` instance
 
 .. _filebrowser_post_upload:
 
@@ -143,6 +161,7 @@ Sent after an Upload has finished. Arguments:
 
 * ``path``: Absolute server path to the file/folder
 * ``name``: Name of the file/folder
+* ``site``: Current ``FileBrowserSite`` instance
 
 .. _filebrowser_pre_delete:
 
@@ -153,6 +172,7 @@ Sent before an Item (File, Folder) is deleted. Arguments:
 
 * ``path``: Absolute server path to the file/folder
 * ``name``: Name of the file/folder
+* ``site``: Current ``FileBrowserSite`` instance
 
 .. _filebrowser_post_delete:
 
@@ -163,6 +183,7 @@ Sent after an Item (File, Folder) has been deleted. Arguments:
 
 * ``path``: Absolute server path to the file/folder
 * ``name``: Name of the file/folder
+* ``site``: Current ``FileBrowserSite`` instance
 
 .. _filebrowser_pre_createdir:
 
@@ -173,6 +194,7 @@ Sent before a new Folder is created. Arguments:
 
 * ``path``: Absolute server path to the folder
 * ``name``: Name of the new folder
+* ``site``: Current ``FileBrowserSite`` instance
 
 .. _filebrowser_post_createdir:
 
@@ -183,6 +205,7 @@ Sent after a new Folder has been created. Arguments:
 
 * ``path``: Absolute server path to the folder
 * ``name``: Name of the new folder
+* ``site``: Current ``FileBrowserSite`` instance
 
 .. _filebrowser_pre_rename:
 
@@ -194,6 +217,7 @@ Sent before an Item (File, Folder) is renamed. Arguments:
 * ``path``: Absolute server path to the file/folder
 * ``name``: Name of the file/folder
 * ``new_name``: New name of the file/folder
+* ``site``: Current ``FileBrowserSite`` instance
 
 .. _filebrowser_post_rename:
 
@@ -205,6 +229,7 @@ Sent after an Item (File, Folder) has been renamed.
 * ``path``: Absolute server path to the file/folder
 * ``name``: Name of the file/folder
 * ``new_name``: New name of the file/folder
+* ``site``: Current ``FileBrowserSite`` instance
 
 ``filebrowser_actions_pre_apply``
 ---------------------------------
@@ -213,6 +238,7 @@ Sent before a custom action is applied. Arguments:
 
 * ``action_name``: Name of the custom action
 * ``fileobjects``: A list of fileobjects the action will be applied to
+* ``site``: Current ``FileBrowserSite`` instance
 
 ``filebrowser_actions_post_apply``
 ----------------------------------
@@ -222,6 +248,7 @@ Sent after a custom action has been applied.
 * ``action_name``: Name of the custom action
 * ``fileobjects``: A list of fileobjects the action has been be applied to
 * ``results``: The response you defined with your custom action
+* ``site``: Current ``FileBrowserSite`` instance
 
 .. _signals_examples:
 
@@ -230,7 +257,7 @@ Example for using these Signals
 
 Here's a small example for using the above Signals::
 
-    from filebrowser.views import filebrowser_pre_upload, filebrowser_post_upload
+    from filebrowser import signals
     
     def pre_upload_callback(sender, **kwargs):
         """
@@ -238,7 +265,7 @@ Here's a small example for using the above Signals::
         """
         print "Pre Upload Callback"
         print "kwargs:", kwargs
-    filebrowser_pre_upload.connect(pre_upload_callback)
+    signals.filebrowser_pre_upload.connect(pre_upload_callback)
     
     def post_upload_callback(sender, **kwargs):
         """
@@ -251,4 +278,4 @@ Here's a small example for using the above Signals::
         print "Filesize:", kwargs['file'].filesize
         print "Orientation:", kwargs['file'].orientation
         print "Extension:", kwargs['file'].extension
-    filebrowser_post_upload.connect(post_upload_callback)
+    signals.filebrowser_post_upload.connect(post_upload_callback)

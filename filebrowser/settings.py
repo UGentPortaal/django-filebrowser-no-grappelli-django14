@@ -1,22 +1,11 @@
 # coding: utf-8
 
-# imports
-import os
-
 # django imports
 from django.conf import settings
 from django.utils.translation import ugettext_lazy as _
 
-# settings for django-tinymce
-try:
-    import tinymce.settings
-    DEFAULT_URL_TINYMCE = tinymce.settings.JS_BASE_URL + '/'
-    DEFAULT_PATH_TINYMCE = tinymce.settings.JS_ROOT + '/'
-except ImportError:
-    DEFAULT_URL_TINYMCE = settings.ADMIN_MEDIA_PREFIX + "tinymce/jscripts/tiny_mce/"
-    DEFAULT_PATH_TINYMCE = os.path.join(settings.STATIC_ROOT, 'admin/tinymce/jscripts/tiny_mce/')
-
 # PATH AND URL SETTINGS
+
 # Main Media Settings 
 # WARNING: FILEBROWSER_MEDIA_ROOT and FILEBROWSER_MEDIA_URL will be removed in the next major release of Filebrowser.
 # Read the documentation on FileBrowser's storages (http://readthedocs.org/docs/django-filebrowser/en/latest/file_storages.html)
@@ -26,19 +15,13 @@ MEDIA_URL = getattr(settings, "FILEBROWSER_MEDIA_URL", settings.MEDIA_URL)
 # Leave empty in order to browse all files under MEDIA_ROOT.
 # DO NOT USE A SLASH AT THE BEGINNING, DO NOT FORGET THE TRAILING SLASH AT THE END.
 DIRECTORY = getattr(settings, "FILEBROWSER_DIRECTORY", 'uploads/')
-# The URL/PATH to your filebrowser media-files.
-URL_FILEBROWSER_MEDIA = getattr(settings, "FILEBROWSER_URL_FILEBROWSER_MEDIA", os.path.join(settings.STATIC_URL, 'filebrowser/'))
-PATH_FILEBROWSER_MEDIA = getattr(settings, "FILEBROWSER_PATH_FILEBROWSER_MEDIA", os.path.join(settings.STATIC_ROOT, 'filebrowser/'))
-# The URL/PATH to your TinyMCE Installation.
-URL_TINYMCE = getattr(settings, "FILEBROWSER_URL_TINYMCE", DEFAULT_URL_TINYMCE)
-PATH_TINYMCE = getattr(settings, "FILEBROWSER_PATH_TINYMCE", DEFAULT_PATH_TINYMCE)
 
 # EXTENSIONS AND FORMATS
 # Allowed Extensions for File Upload. Lower case is important.
 EXTENSIONS = getattr(settings, "FILEBROWSER_EXTENSIONS", {
     'Folder': [''],
     'Image': ['.jpg','.jpeg','.gif','.png','.tif','.tiff'],
-    'Document': ['.pdf','.doc','.rtf','.txt','.xls','.csv'],
+    'Document': ['.pdf','.doc','.rtf','.txt','.xls','.csv','.docx'],
     'Video': ['.mov','.wmv','.mpeg','.mpg','.avi','.rm'],
     'Audio': ['.mp3','.mp4','.wav','.aiff','.midi','.m4p']
 })
@@ -53,7 +36,8 @@ SELECT_FORMATS = getattr(settings, "FILEBROWSER_SELECT_FORMATS", {
 })
 
 # VERSIONS
-# Directory to Save Image Versions (and Thumbnails). Relative to MEDIA_ROOT.
+
+# Directory to Save Image Versions (and Thumbnails). Relative to site.storage.location.
 # If no directory is given, versions are stored within the Image directory.
 # VERSION URL: VERSIONS_BASEDIR/original_path/originalfilename_versionsuffix.extension
 VERSIONS_BASEDIR = getattr(settings, 'FILEBROWSER_VERSIONS_BASEDIR', '')
@@ -74,7 +58,8 @@ ADMIN_VERSIONS = getattr(settings, 'FILEBROWSER_ADMIN_VERSIONS', ['thumbnail', '
 ADMIN_THUMBNAIL = getattr(settings, 'FILEBROWSER_ADMIN_THUMBNAIL', 'admin_thumbnail')
 
 # PLACEHOLDER
-# Path to placeholder image
+
+# Path to placeholder image (relative to storage location)
 PLACEHOLDER = getattr(settings, "FILEBROWSER_PLACEHOLDER", "")
 # Show Placeholder if the original image does not exist
 SHOW_PLACEHOLDER = getattr(settings, "FILEBROWSER_SHOW_PLACEHOLDER", False)
@@ -82,6 +67,7 @@ SHOW_PLACEHOLDER = getattr(settings, "FILEBROWSER_SHOW_PLACEHOLDER", False)
 FORCE_PLACEHOLDER = getattr(settings, "FILEBROWSER_FORCE_PLACEHOLDER", False)
 
 # EXTRA SETTINGS
+
 # If set to True, the FileBrowser will not try to import a mis-installed PIL.
 STRICT_PIL = getattr(settings, 'FILEBROWSER_STRICT_PIL', False)
 # PIL's Error "Suspension not allowed here" work around:
@@ -110,13 +96,16 @@ DEFAULT_SORTING_BY = getattr(settings, "FILEBROWSER_DEFAULT_SORTING_BY", "date")
 # Sorting Order: asc, desc
 DEFAULT_SORTING_ORDER = getattr(settings, "FILEBROWSER_DEFAULT_SORTING_ORDER", "desc")
 # regex to clean dir names before creation
-FOLDER_REGEX = getattr(settings, "FILEBROWSER_FOLDER_REGEX", r'^[\w._/-]+$')
+FOLDER_REGEX = getattr(settings, "FILEBROWSER_FOLDER_REGEX", r'^[\w._\ /-]+$')
 # Traverse directories when searching
 SEARCH_TRAVERSE = getattr(settings, "FILEBROWSER_SEARCH_TRAVERSE", False)
 # Default Upload and Version Permissions
 DEFAULT_PERMISSIONS = getattr(settings, "FILEBROWSER_DEFAULT_PERMISSIONS", 0755)
+# Overwrite existing files on upload
+OVERWRITE_EXISTING = getattr(settings, "FILEBROWSER_OVERWRITE_EXISTING", True)
 
 # EXTRA TRANSLATION STRINGS
+
 # The following strings are not availabe within views or templates
 _('Folder')
 _('Image')

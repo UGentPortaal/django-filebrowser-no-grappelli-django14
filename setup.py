@@ -1,14 +1,13 @@
 import os
-import codecs
 from setuptools import setup, find_packages
 
 def read(fname):
-    return codecs.open(os.path.join(os.path.dirname(__file__), fname)).read()
+    return open(os.path.join(os.path.dirname(__file__), fname)).read()
 
 setup(
     name='django-filebrowser',
-    version='3.4.3',
-    description='Media-Management',
+    version='3.5.3',
+    description='Media-Management no Grappelli',
     long_description = read('README.rst'),
     author='Patrick Kranzlmueller, Axel Swoboda, Vaclav Mikolasek (vonautomatisch)',
     author_email='office@vonautomatisch.at',

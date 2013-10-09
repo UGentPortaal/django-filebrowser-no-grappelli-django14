@@ -1,25 +1,28 @@
 # coding: utf-8
 
 # PYTHON IMPORTS
-import os, shutil, re, datetime, time
+import os, datetime, time, platform
 import mimetypes
+from tempfile import NamedTemporaryFile
 
 # DJANGO IMPORTS
-from django.utils.translation import ugettext as _
+from django.core.files import File
 
 # FILEBROWSER IMPORTS
-from filebrowser.settings import *
-from filebrowser.functions import get_file_type, url_join, get_version_path, get_original_path, sort_by_attr, version_generator, path_strip, url_strip
+from filebrowser.settings import EXTENSIONS, VERSIONS, ADMIN_VERSIONS, VERSIONS_BASEDIR, VERSION_QUALITY, PLACEHOLDER, FORCE_PLACEHOLDER, SHOW_PLACEHOLDER, STRICT_PIL, IMAGE_MAXBLOCK
+from filebrowser.utils import path_strip, scale_and_crop
 from django.utils.encoding import smart_str, smart_unicode
 
 # PIL import
 if STRICT_PIL:
-    from PIL import Image
+    from PIL import Image, ImageFile
 else:
     try:
-        from PIL import Image
+        from PIL import Image, ImageFile
     except ImportError:
-        import Image
+        import Image, ImageFile
+
+ImageFile.MAXBLOCK = IMAGE_MAXBLOCK # default is 64k
 
 
 class FileListing():
@@ -28,15 +31,14 @@ class FileListing():
     
     An example::
         
-        import os
-        from filebrowser.settings import MEDIA_ROOT, DIRECTORY
         from filebrowser.base import FileListing
-        
-        filelisting = FileListing(os.path.join(MEDIA_ROOT, DIRECTORY), sorting_by='date', sorting_order='desc')
+        filelisting = FileListing(path, sorting_by='date', sorting_order='desc')
         print filelisting.files_listing_total()
         print filelisting.results_listing_total()
         for fileobject in filelisting.files_listing_total():
             print fileobject.filetype
+
+    where path is a relative path to a storage location
     """
     # Four variables to store the length of a listing obtained by various listing methods
     # (updated whenever a particular listing method is called).
@@ -55,12 +57,37 @@ class FileListing():
             site = default_site
         self.site = site
 
+    # HELPER METHODS
+    # sort_by_attr
+
+    def sort_by_attr(self, seq, attr):
+        """
+        Sort the sequence of objects by object's attribute
+        
+        Arguments:
+        seq  - the list or any sequence (including immutable one) of objects to sort.
+        attr - the name of attribute to sort by
+        
+        Returns:
+        the sorted list of objects.
+        """
+        import operator
+        
+        # Use the "Schwartzian transform"
+        # Create the auxiliary list of tuples where every i-th tuple has form
+        # (seq[i].attr, i, seq[i]) and sort it. The second item of tuple is needed not
+        # only to provide stable sorting, but mainly to eliminate comparison of objects
+        # (which can be expensive or prohibited) in case of equal attribute values.
+        intermed = map(None, map(getattr, seq, (attr,)*len(seq)), xrange(len(seq)), seq)
+        intermed.sort()
+        return map(operator.getitem, intermed, (-1,) * len(intermed))
+
     _is_folder_stored = None
-    def _is_folder(self):
+    @property
+    def is_folder(self):
         if self._is_folder_stored == None:
             self._is_folder_stored = self.site.storage.isdir(self.path)
         return self._is_folder_stored
-    is_folder = property(_is_folder)
 
     def listing(self):
         "List all files for path"
@@ -82,9 +109,11 @@ class FileListing():
         if dirs:
             for d in dirs:
                 self._walk(os.path.join(path, d), filelisting)
+                filelisting.extend([path_strip(os.path.join(path, d), self.site.directory)])
 
-        filelisting.extend(dirs)
-        filelisting.extend(files)
+        if files:
+            for f in files:
+                filelisting.extend([path_strip(os.path.join(path, f), self.site.directory)])
 
     
     def walk(self):
@@ -108,7 +137,7 @@ class FileListing():
         files = self._fileobjects_total
         
         if self.sorting_by:
-            files = sort_by_attr(files, self.sorting_by)
+            files = self.sort_by_attr(files, self.sorting_by)
         if self.sorting_order == "desc":
             files.reverse()
         
@@ -122,7 +151,7 @@ class FileListing():
             fileobject = FileObject(os.path.join(self.site.directory, item), site=self.site)
             files.append(fileobject)
         if self.sorting_by:
-            files = sort_by_attr(files, self.sorting_by)
+            files = self.sort_by_attr(files, self.sorting_by)
         if self.sorting_order == "desc":
             files.reverse()
         self._results_walk_total = len(files)
@@ -178,10 +207,9 @@ class FileObject():
     An example::
         
         from filebrowser.base import FileObject
-        
         fileobject = FileObject(path)
     
-    where path is a relative path to a storage location.
+    where path is a relative path to a storage location
     """
     
     def __init__(self, path, site=None):
@@ -189,13 +217,15 @@ class FileObject():
             from filebrowser.sites import site as default_site
             site = default_site
         self.site = site
-        self.path = path
+        if platform.system() == 'Windows':
+            self.path = path.replace('\\','/')
+        else:
+            self.path = path
         self.head = os.path.dirname(path)
         self.filename = os.path.basename(path)
         self.filename_lower = self.filename.lower()
         self.filename_root, self.extension = os.path.splitext(self.filename)
         self.mimetype = mimetypes.guess_type(self.filename)
-
     
     def __str__(self):
         return smart_str(self.path)
@@ -212,66 +242,113 @@ class FileObject():
     
     def __len__(self):
         return len(self.path)
+
+    # HELPER METHODS
+    # _get_file_type
+
+    def _get_file_type(self):
+        "Get file type as defined in EXTENSIONS."
+        file_type = ''
+        for k, v in EXTENSIONS.iteritems():
+            for extension in v:
+                if self.extension.lower() == extension.lower():
+                    file_type = k
+        return file_type
     
     # GENERAL ATTRIBUTES
+    # filetype
+    # filesize
+    # date
+    # datetime
+    # exists
+
     _filetype_stored = None
-    def _filetype(self):
+    @property
+    def filetype(self):
+        "Filetype as defined with EXTENSIONS"
         if self._filetype_stored != None:
             return self._filetype_stored
         if self.is_folder:
             self._filetype_stored = 'Folder'
         else:
-            self._filetype_stored = get_file_type(self.filename)
+            self._filetype_stored = self._get_file_type()
         return self._filetype_stored
-    filetype = property(_filetype)
     
     _filesize_stored = None
-    def _filesize(self):
+    @property
+    def filesize(self):
+        "Filesize in bytes"
         if self._filesize_stored != None:
             return self._filesize_stored
-        if self.exists():
+        if self.exists:
             self._filesize_stored = self.site.storage.size(self.path)
             return self._filesize_stored
         return None
-    filesize = property(_filesize)
     
     _date_stored = None
-    def _date(self):
+    @property
+    def date(self):
+        "Modified time (from site.storage) as float (mktime)"
         if self._date_stored != None:
             return self._date_stored
-        if self.exists():
+        if self.exists:
             self._date_stored = time.mktime(self.site.storage.modified_time(self.path).timetuple())
             return self._date_stored
         return None
-    date = property(_date)
     
-    def _datetime(self):
+    @property
+    def datetime(self):
+        "Modified time (from site.storage) as datetime"
         if self.date:
             return datetime.datetime.fromtimestamp(self.date)
         return None
-    datetime = property(_datetime)
 
     _exists_stored = None
+    @property
     def exists(self):
+        "True, if the path exists, False otherwise"
         if self._exists_stored == None:
             self._exists_stored = self.site.storage.exists(self.path)
         return self._exists_stored
     
     # PATH/URL ATTRIBUTES
+    # path (see init)
+    # path_relative_directory
+    # path_full
+    # dirname
+    # url
     
-    def _path_relative_directory(self):
-        "path relative to DIRECTORY"
+    @property
+    def path_relative_directory(self):
+        "Path relative to site.directory"
         return path_strip(self.path, self.site.directory)
-    path_relative_directory = property(_path_relative_directory)
-    
-    def _url(self):
+
+    @property
+    def path_full(self):
+        "Absolute path as defined with site.storage"
+        return self.site.storage.path(self.path)
+
+    @property
+    def dirname(self):
+        "The directory (not including site.directory)"
+        return os.path.dirname(self.path_relative_directory)
+
+    @property
+    def url(self):
+        "URL for the file/folder as defined with site.storage"
         return self.site.storage.url(self.path)
-    url = property(_url)
 
     # IMAGE ATTRIBUTES
+    # dimensions
+    # width
+    # height
+    # aspectratio
+    # orientation
 
     _dimensions_stored = None
-    def _dimensions(self):
+    @property
+    def dimensions(self):
+        "Image dimensions as a tuple"
         if self.filetype != 'Image':
             return None
         if self._dimensions_stored != None:
@@ -282,119 +359,204 @@ class FileObject():
         except:
             pass
         return self._dimensions_stored
-    dimensions = property(_dimensions)
 
-    def _width(self):
+    @property
+    def width(self):
+        "Image width in px"
         if self.dimensions:
             return self.dimensions[0]
         return None
-    width = property(_width)
     
-    def _height(self):
+    @property
+    def height(self):
+        "Image height in px"
         if self.dimensions:
             return self.dimensions[1]
         return None
-    height = property(_height)
 
-    def _aspectratio(self):
+    @property
+    def aspectratio(self):
+        "Aspect ratio (float format)"
         if self.dimensions:
             return float(self.width)/float(self.height)
         return None
-    aspectratio = property(_aspectratio)
     
-    def _orientation(self):
+    @property
+    def orientation(self):
+        "Image orientation, either 'Landscape' or 'Portrait'"
         if self.dimensions:
             if self.dimensions[0] >= self.dimensions[1]:
                 return "Landscape"
             else:
                 return "Portrait"
         return None
-    orientation = property(_orientation)
     
     # FOLDER ATTRIBUTES
+    # directory
+    # folder
+    # is_folder
+    # is_empty
     
-    def _directory(self):
+    @property
+    def directory(self):
+        "Folder(s) relative from site.directory" # FIXME: needed/rename?
         return path_strip(self.path, self.site.directory)
-    directory = property(_directory)
     
-    def _folder(self):
+    @property
+    def folder(self):
+        "Parent folder(s)" # FIXME: needed/rename?
         return os.path.dirname(path_strip(os.path.join(self.head,''), self.site.directory))
-    folder = property(_folder)
     
     _is_folder_stored = None
-    def _is_folder(self):
+    @property
+    def is_folder(self):
+        "True, if path is a folder"
         if self._is_folder_stored == None:
             self._is_folder_stored = self.site.storage.isdir(self.path)
         return self._is_folder_stored
-    is_folder = property(_is_folder)
     
-    def _is_empty(self):
+    @property
+    def is_empty(self):
+        "True, if folder is empty"
         if self.is_folder:
             dirs, files = self.site.storage.listdir(self.path)
             if not dirs and not files:
                 return True
         return False
-    is_empty = property(_is_empty)
     
+    # ORIGINAL
+    # original_filename
+    # original
+
+    @property
+    def original_filename(self):
+        "Get the filename of an original image from a version"
+        tmp = self.filename_root.split("_")
+        if tmp[len(tmp)-1] in VERSIONS:
+            return u"%s%s" % (self.filename_root.replace("_%s" % tmp[len(tmp)-1], ""), self.extension)
+        return self.filename
+
+    @property
+    def original(self):
+        "Returns the original FileObject"
+        if self.is_version:
+            relative_path = self.head.replace(self.versions_basedir, "").lstrip("/")
+            return FileObject(os.path.join(self.site.directory, relative_path, self.original_filename), site=self.site)
+        return self
+
     # VERSIONS
+    # is_version
+    # original
+    # versions_basedir
+    # versions
+    # admin_versions
+    # version_name(suffix)
+    # version_path(suffix)
+    # version_generate(suffix)
     
-    def _is_version(self):
+    @property
+    def is_version(self):
+        "True if file is a version, false otherwise"
         tmp = self.filename_root.split("_")
         if tmp[len(tmp)-1] in VERSIONS:
             return True
-        else:
-            return False
-    is_version = property(_is_version)
+        return False
     
-    def _original(self):
-        if self.is_version:
-            return FileObject(get_original_path(self.path, site=self.site), site=self.site)
-        return self
-    original = property(_original)
-    
-    def _versions_basedir(self):
-        if VERSIONS_BASEDIR and self.site.storage.exists(VERSIONS_BASEDIR):
+    @property
+    def versions_basedir(self):
+        "Main directory for storing versions (either VERSIONS_BASEDIR or site.directory)"
+        if VERSIONS_BASEDIR:
             return VERSIONS_BASEDIR
+        elif self.site.directory:
+            return self.site.directory
         else:
-            return self.head
-    versions_basedir = property(_versions_basedir)
-    
-    def version_name(self, version_suffix):
-        return self.filename_root + "_" + version_suffix + self.extension
+            return ""
     
     def versions(self):
+        "List of versions (not checking if they actually exist)"
         version_list = []
         if self.filetype == "Image":
             for version in VERSIONS:
-                version_list.append(os.path.join(self.versions_basedir, self.version_name(version)))
+                version_list.append(os.path.join(self.versions_basedir, self.folder, self.version_name(version)))
         return version_list
     
     def admin_versions(self):
+        "List of admin versions (not checking if they actually exist)"
         version_list = []
         if self.filetype == "Image":
             for version in ADMIN_VERSIONS:
-                version_list.append(os.path.join(self.versions_basedir, self.version_name(version)))
-                #version_list.append(FileObject(os.path.join(self.versions_basedir, self.version_name(version))))
+                version_list.append(os.path.join(self.versions_basedir, self.folder, self.version_name(version)))
         return version_list
-    
+
+    def version_name(self, version_suffix):
+        "Name of a version"
+        return self.filename_root + "_" + version_suffix + self.extension
+
+    def version_path(self, version_suffix):
+        "Path to a version (relative to storage location)"
+        return os.path.join(self.versions_basedir, self.folder, self.version_name(version_suffix))
+
     def version_generate(self, version_suffix):
-        version_path = get_version_path(self.path, version_suffix, site=self.site)
+        "Generate a version"
+        path = self.path
+        if FORCE_PLACEHOLDER or (SHOW_PLACEHOLDER and not self.site.storage.isfile(path)):
+            path = PLACEHOLDER
+        version_path = self.version_path(version_suffix)
         if not self.site.storage.isfile(version_path):
-            version_path = version_generator(self.path, version_suffix, site=self.site)
-        elif self.site.storage.modified_time(self.path) > self.site.storage.modified_time(version_path):
-            version_path = version_generator(self.path, version_suffix, force=True, site=self.site)
+            version_path = self._generate_version(version_suffix)
+        elif self.site.storage.modified_time(path) > self.site.storage.modified_time(version_path):
+            version_path = self._generate_version(version_suffix)
         return FileObject(version_path, site=self.site)
+
+    def _generate_version(self, version_suffix):
+        """
+        Generate Version for an Image.
+        value has to be a path relative to the storage location.
+        """
+        
+        tmpfile = File(NamedTemporaryFile())
+
+        try:
+            f = self.site.storage.open(self.path)
+        except IOError:
+            return ""
+        im = Image.open(f)
+        version_path = self.version_path(version_suffix)
+        version_dir, version_basename = os.path.split(version_path)
+        root, ext = os.path.splitext(version_basename)
+        version = scale_and_crop(im, VERSIONS[version_suffix]['width'], VERSIONS[version_suffix]['height'], VERSIONS[version_suffix]['opts'])
+        if not version:
+            version = im
+        # version methods as defined with VERSIONS
+        if 'methods' in VERSIONS[version_suffix].keys():
+            for m in VERSIONS[version_suffix]['methods']:
+                if callable(m):
+                    version = m(version)
+        # save version
+        try:
+            version.save(tmpfile, format=Image.EXTENSION[ext.lower()], quality=VERSION_QUALITY, optimize=(os.path.splitext(version_path)[1] != '.gif'))
+        except IOError:
+            version.save(tmpfile, format=Image.EXTENSION[ext.lower()], quality=VERSION_QUALITY)
+        # remove old version, if any
+        if version_path != self.site.storage.get_available_name(version_path):
+            self.site.storage.delete(version_path)
+        self.site.storage.save(version_path, tmpfile)
+        return version_path
     
-    # FUNCTIONS
+    # DELETE FUNCTIONS
+    # delete
+    # delete_versions
+    # delete_admin_versions
     
     def delete(self):
+        "Delete FileObject (deletes a folder recursively)"
         if self.is_folder:
             self.site.storage.rmtree(self.path)
-            # shutil.rmtree(self.path)
         else:
             self.site.storage.delete(self.path)
     
     def delete_versions(self):
+        "Delete versions"
         for version in self.versions():
             try:
                 self.site.storage.delete(version)
@@ -402,10 +564,10 @@ class FileObject():
                 pass
     
     def delete_admin_versions(self):
+        "Delete admin versions"
         for version in self.admin_versions():
             try:
                 self.site.storage.delete(version)
             except:
                 pass
-
 

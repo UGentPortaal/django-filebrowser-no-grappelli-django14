@@ -23,7 +23,7 @@ Custom actions are simple functions of the form::
     def foo(request, fileobjects):
         # Do something with the fileobjects
 
-the first parameter is an ``HttpRequest`` object (representing the submitted form in which a user selected the action) and the second parameter is a list of ``FileObjects`` to which the action should be applied.
+The first parameter is an ``HttpRequest`` object (representing the submitted form in which a user selected the action) and the second parameter is a list of ``FileObjects`` to which the action should be applied.
 
 In the current |fb| version, the list contains exactly one instance of FileObject (representing the file from the detail view), but this may change in the future, as custom actions may become available also in browse views (similar to admin actions applied to a list of checked objects).
 
@@ -66,6 +66,3 @@ Some actions may require user confirmation (e.g., in order to prevent accidental
     def crop_image(request, fileobjects):
         files = '&f='.join([f.path_relative for f in fileobjects])
         return HttpResponseRedirect('/confirm/?action=crop_image&f=%s' % files)
-
-
-
