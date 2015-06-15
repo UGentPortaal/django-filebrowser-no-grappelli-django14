@@ -6,13 +6,16 @@ def read(fname):
 
 setup(
     name='django-filebrowser',
-    version='3.5.5',
+    version='3.5.7',
     description='Media-Management no Grappelli',
     long_description = read('README.rst'),
-    author='Patrick Kranzlmueller, Axel Swoboda, Vaclav Mikolasek (vonautomatisch)',
-    author_email='office@vonautomatisch.at',
-    url = 'http://django-filebrowser.readthedocs.org',
+    url = 'https://github.com/smacker/django-filebrowser-no-grappelli',
     download_url='',
+    author='Patrick Kranzlmueller, Axel Swoboda (vonautomatisch)',
+    author_email='office@vonautomatisch.at',
+    maintainer='Maxim Sukharev',
+    maintainer_email='max@smacker.ru',
+    license='BSD',
     packages=find_packages(),
     include_package_data=True,
     classifiers=[
@@ -23,6 +26,13 @@ setup(
         'License :: OSI Approved :: BSD License',
         'Operating System :: OS Independent',
         'Programming Language :: Python',
+        'Programming Language :: Python :: 2',
+        'Programming Language :: Python :: 2.6',
+        'Programming Language :: Python :: 2.7',
+        'Programming Language :: Python :: 3',
+        'Programming Language :: Python :: 3.1',
+        'Programming Language :: Python :: 3.2',
+        'Programming Language :: Python :: 3.3',
     ],
-    zip_safe = False,
+    zip_safe = False
 )
